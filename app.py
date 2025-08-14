@@ -6,7 +6,7 @@ import json
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv("/home/ala/Desktop/Thomas/vR1/vr1.csv")
+        df = pd.read_csv("institutional_diversity_metric.csv")
         
         # Verify required columns exist
         required_columns = [
@@ -291,3 +291,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
