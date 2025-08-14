@@ -6,7 +6,7 @@ import json
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv("institutional_diversity_metric.csv")
+        df = pd.read_csv("/home/ala/Desktop/Thomas/vR1/vr1.csv")
         
         # Verify required columns exist
         required_columns = [
@@ -17,7 +17,7 @@ def load_data():
             'representative_gender', 'representative_race', 'representative_joint',
             'compensatory_gender', 'compensatory_race', 'compensatory_joint',
             'blaus_gender', 'blaus_race',
-            'R2', 'D/PU', 'Masters', 'Baccalaureate', 'BacAssoc', 'Associates',
+            'R1', 'R2', 'D/PU', 'Masters', 'Baccalaureate', 'BacAssoc', 'Associates',
             'SpecialFocus', 'Tribal', 'HBCU', 'FaithRelated', 'MedicalHealth',
             'EngineeringTech', 'Business', 'Arts', 'Law'
         ]
@@ -44,7 +44,8 @@ def load_data():
 # Carnegie Classification Options
 def get_carnegie_filters():
     return {
-        "R2: Doctoral Universities – High research activity": "R2",
+        "R1: Doctoral Universities – Very high research": "R1",
+        "R2: Doctoral Universities – High research": "R2",
         "D/PU: Doctoral/Professional Universities": "D/PU",
         "Master's Colleges and Universities": "Masters",
         "Baccalaureate Colleges": "Baccalaureate",
@@ -75,7 +76,7 @@ def main():
         
         # Program Level Filters
         st.subheader("🎓 Program Levels")
-        level_options = ["All Levels", "Undergraduate", "Graduate", "Doctoral (R2)"]
+        level_options = ["All Levels", "Undergraduate", "Graduate", "Other"]  # Added "Other" option
         selected_level = st.radio(
             "Select Program Level",
             options=level_options,
@@ -130,14 +131,13 @@ def main():
     # Apply filters
     filtered_df = df.copy()
     
-    # Program Level Filter
+    # Program Level Filter - updated to include "Other"
     if selected_level == "Undergraduate":
         filtered_df = filtered_df[filtered_df["level"] == "undergraduate"]
     elif selected_level == "Graduate":
         filtered_df = filtered_df[filtered_df["level"] == "graduate"]
-    elif selected_level == "Doctoral (R2)":
-        filtered_df = filtered_df[filtered_df["R2"] == 1]
-    # "All Levels" shows everything
+    elif selected_level == "Other":
+        filtered_df = filtered_df[~filtered_df["level"].isin(["undergraduate", "graduate"])]
     
     # State filter
     if selected_states:
@@ -146,7 +146,6 @@ def main():
     # Carnegie classification filter
     active_filters = [col for col, selected in carnegie_selections.items() if selected]
     if active_filters:
-        # Create mask for selected institution types
         mask = filtered_df[active_filters].any(axis=1)
         filtered_df = filtered_df[mask]
 
@@ -177,14 +176,13 @@ def main():
 
     # Main dataframe display
     display_columns = [
-        "rank", "institution", "city", "state", "level",
+        "rank", "institution", "city", "state",
         selected_metric, "percent_female", "percent_of_color",
         "total_students"
     ]
     
     display_df = filtered_df[display_columns].rename(columns={
-        selected_metric: "diversity_score",
-        "level": "program_level"
+        selected_metric: "diversity_score"
     })
 
     # Format the display
@@ -195,7 +193,6 @@ def main():
             "institution": st.column_config.TextColumn("Institution"),
             "city": st.column_config.TextColumn("City"),
             "state": st.column_config.TextColumn("State"),
-            "program_level": st.column_config.TextColumn("Program Level"),
             "diversity_score": st.column_config.NumberColumn(
                 "Score",
                 help="Diversity metric score (higher is better)",
@@ -228,7 +225,7 @@ def main():
     st.download_button(
         "💾 Download Results as CSV",
         data=csv,
-        file_name="diversity_rankings.csv",
+        file_name=f"{selected_metric_label.lower().replace(' ', '_')}_rankings.csv",
         mime="text/csv",
         use_container_width=True
     )
@@ -252,7 +249,6 @@ def main():
             
         with col2:
             st.subheader("Institution Characteristics")
-            # Show which categories the institution belongs to
             categories = []
             for label, col in carnegie_options.items():
                 if col in inst_data and inst_data[col] == 1:
@@ -265,12 +261,33 @@ def main():
             else:
                 st.write("No special classifications")
             
-            # Show diversity scores
             st.write("**Diversity Scores:**")
             st.write(f"- Descriptive Gender: {inst_data['descriptive_gender']:.3f}")
             st.write(f"- Descriptive Race: {inst_data['descriptive_race']:.3f}")
             st.write(f"- Blau Gender Index: {inst_data['blaus_gender']:.3f}")
             st.write(f"- Blau Race Index: {inst_data['blaus_race']:.3f}")
+
+    # Footer
+    st.markdown(
+        """
+        <hr>
+        <p style="text-align: center; font-size: 0.8em; color: gray;">
+        <strong>© University of Connecticut</strong>
+        </p>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Logo with dark background
+    st.markdown(
+        """
+        <div style="background-color:#0a0a0a; padding:20px; text-align:center;">
+            <img src="https://publicpolicy.media.uconn.edu/wp-content/uploads/sites/3091/2022/04/public-policy-stacked_white.png" 
+                 alt="UConn Public Policy" style="max-width:300px;">
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 if __name__ == "__main__":
     main()
