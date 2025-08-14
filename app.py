@@ -18,110 +18,176 @@ def load_data():
 
     return df
 
-# Carnegie Classification Options
-def get_carnegie_filters():
-    return {
-        "R1: Doctoral Universities – Very high research activity": "R1",
-        "R2: Doctoral Universities – High research activity": "R2",
-        "D/PU: Doctoral/Professional Universities": "D/PU",
-        "Master's Colleges and Universities": "Masters",
-        "Baccalaureate Colleges": "Baccalaureate",
-        "Baccalaureate/Associate's Colleges": "BacAssoc",
-        "Associate's Colleges": "Associates",
-        "Special Focus Institutions": "SpecialFocus",
-        "Tribal Colleges and Universities": "Tribal",
-        "HBCU (Historically Black Colleges and Universities)": "HBCU",
-        "Faith-Related Institutions": "FaithRelated",
-        "Medical Schools & Centers": "MedicalHealth",
-        "Engineering and Technology Schools": "EngineeringTech",
-        "Business & Management Schools": "Business",
-        "Arts, Music & Design Schools": "Arts",
-        "Law Schools": "Law"
-    }
-
-# The Main App
 def main():
-    st.title("INSTITUTIONAL DIVERSITY RANKING")
-
-    df = load_data()
-    carnegie_options = get_carnegie_filters()
-
-    st.sidebar.header("Filter & Ranking Options")
-
-    # Metric selector
-    metric_options = {
-        "Descriptive (Gender)": "descriptive_gender",
-        "Descriptive (Race)": "descriptive_race",
-        "Descriptive (Joint)": "descriptive_joint",
-        "Representative (Gender)": "representative_gender",
-        "Representative (Race)": "representative_race",
-        "Representative (Joint)": "representative_joint",
-        "Compensatory (Gender)": "compensatory_gender",
-        "Compensatory (Race)": "compensatory_race",
-        "Compensatory (Joint)": "compensatory_joint",
-        "Blau Index (Gender)": "blaus_gender",
-        "Blau Index (Race)": "blaus_race"
-    }
-
-    selected_metric_label = st.sidebar.selectbox("Select Diversity Metric", list(metric_options.keys()))
-    selected_metric = metric_options[selected_metric_label]
-
-    # State filter
-    selected_states = st.sidebar.multiselect(
-        "Select States", options=sorted(df["state"].unique()), default=[])
-
-    # Carnegie Classification filter
-    st.sidebar.markdown("### Carnegie Classification Filters")
-    carnegie_selections = {}
+    st.set_page_config(layout="wide")
+    st.title("🏛️ Institutional Diversity Ranking Tool")
     
-    for label, col in carnegie_options.items():
-        carnegie_selections[col] = st.sidebar.checkbox(label, value=True)
+    df = load_data()
+
+    # Sidebar filters
+    with st.sidebar:
+        st.header("🔍 Filter Options")
+        
+        # Program Level Filters
+        st.subheader("🎓 Program Levels")
+        show_total = st.checkbox("All Students (Total)", value=True)
+        show_undergrad = st.checkbox("Undergraduate Programs", value=True)
+        show_graduate = st.checkbox("Graduate Programs", value=True)
+        show_doctoral = st.checkbox("Doctoral Programs (R2)", value=True)
+        
+        # State filter
+        selected_states = st.multiselect(
+            "Select States (optional)",
+            options=sorted(df["state"].unique())
+        )
+        
+        # Metric selector
+        metric_options = {
+            "Descriptive (Gender)": "descriptive_gender",
+            "Descriptive (Race)": "descriptive_race",
+            "Descriptive (Joint)": "descriptive_joint",
+            "Representative (Gender)": "representative_gender",
+            "Representative (Race)": "representative_race",
+            "Representative (Joint)": "representative_joint",
+            "Compensatory (Gender)": "compensatory_gender",
+            "Compensatory (Race)": "compensatory_race",
+            "Compensatory (Joint)": "compensatory_joint",
+            "Blau Index (Gender)": "blaus_gender",
+            "Blau Index (Race)": "blaus_race"
+        }
+        selected_metric_label = st.selectbox(
+            "Diversity Metric to Rank By", 
+            list(metric_options.keys())
+        )
+        selected_metric = metric_options[selected_metric_label]
+        
+        # Institution Type Filters
+        st.subheader("🏫 Institution Types")
+        inst_type_options = {
+            "D/PU: Doctoral/Professional Universities": "D/PU",
+            "Master's Colleges and Universities": "Masters",
+            "Baccalaureate Colleges": "Baccalaureate",
+            "Associate's Colleges": "Associates",
+            "Special Focus Institutions": "SpecialFocus",
+            "HBCUs": "HBCU"
+        }
+        
+        inst_type_selections = {}
+        for label, col in inst_type_options.items():
+            inst_type_selections[col] = st.checkbox(label, value=True)
 
     # Apply filters
     filtered_df = df.copy()
+    
+    # Program Level Filters
+    level_conditions = []
+    if show_total:
+        level_conditions.append(filtered_df["level"] == "total")
+    if show_undergrad:
+        level_conditions.append(filtered_df["level"] == "undergraduate")
+    if show_graduate:
+        level_conditions.append(filtered_df["level"] == "graduate")
+    
+    if level_conditions:
+        filtered_df = filtered_df[pd.concat(level_conditions, axis=1).any(axis=1)]
+    
+    # Doctoral programs filter (R2)
+    if show_doctoral:
+        filtered_df = filtered_df[filtered_df["R2"] == 1]
     
     # State filter
     if selected_states:
         filtered_df = filtered_df[filtered_df["state"].isin(selected_states)]
     
-    # Carnegie classification filter
-    active_filters = [col for col, selected in carnegie_selections.items() if selected]
-    if active_filters:
-        # Create a condition where at least one of the selected classifications is True (1)
-        condition = filtered_df[active_filters].any(axis=1)
-        filtered_df = filtered_df[condition]
+    # Institution type filters
+    active_inst_filters = [col for col, selected in inst_type_selections.items() if selected]
+    if active_inst_filters:
+        filtered_df = filtered_df[filtered_df[active_inst_filters].any(axis=1)]
 
-    # Drop missing metrics
+    # Ensure selected metric exists
+    if selected_metric not in filtered_df.columns:
+        st.error(f"Error: The selected metric '{selected_metric}' is not available in the filtered data.")
+        st.stop()
+
+    # Drop rows with missing values for the selected metric
     filtered_df = filtered_df.dropna(subset=[selected_metric])
 
     # Sorting and ranking
-    filtered_df = filtered_df.sort_values(by=[selected_metric, "institution"], ascending=[False, True])
+    filtered_df = filtered_df.sort_values(
+        by=[selected_metric, "institution"], 
+        ascending=[False, True]
+    )
     filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
-    # Display table
-    display_df = filtered_df[[
-        "rank", "institution", "city", "state", selected_metric, 
-        "percent_female", "percent_of_color", "level"
-    ]].rename(columns={selected_metric: "diversity_score"})
+    # Display results
+    st.header(f"📊 Ranking by {selected_metric_label}")
+    
+    # Summary stats
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Institutions", len(filtered_df))
+    with col2:
+        avg_score = filtered_df[selected_metric].mean()
+        st.metric("Average Score", f"{avg_score:.3f}")
+    with col3:
+        st.metric("Top Score", f"{filtered_df[selected_metric].max():.3f}")
 
-    st.markdown(f"Top Institutions by {selected_metric_label}")
+    # Main dataframe display
+    display_columns = [
+        "rank", "institution", "city", "state", "level",
+        selected_metric, "percent_female", "percent_of_color",
+        "total_students"
+    ]
+    
+    display_df = filtered_df[display_columns].rename(columns={
+        selected_metric: "diversity_score",
+        "level": "program_level"
+    })
+
+    # Format the display
     st.dataframe(
-        display_df.reset_index(drop=True),
+        display_df,
         column_config={
-            "diversity_score": st.column_config.NumberColumn(format="%.3f"),
-            "percent_female": st.column_config.NumberColumn("% Female", format="%.1f%%"),
-            "percent_of_color": st.column_config.NumberColumn("% Students of Color", format="%.1f%%")
+            "rank": st.column_config.NumberColumn("Rank", width="small"),
+            "institution": st.column_config.TextColumn("Institution"),
+            "city": st.column_config.TextColumn("City"),
+            "state": st.column_config.TextColumn("State"),
+            "program_level": st.column_config.TextColumn("Program Level"),
+            "diversity_score": st.column_config.NumberColumn(
+                "Score",
+                help="Diversity metric score (higher is better)",
+                format="%.3f",
+                width="small"
+            ),
+            "percent_female": st.column_config.NumberColumn(
+                "% Female",
+                format="%.1f%%",
+                width="small"
+            ),
+            "percent_of_color": st.column_config.NumberColumn(
+                "% Students of Color",
+                format="%.1f%%",
+                width="small"
+            ),
+            "total_students": st.column_config.NumberColumn(
+                "Total Students",
+                format="%,d",
+                width="small"
+            )
         },
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True,
+        height=600
     )
 
     # Download option
     csv = display_df.to_csv(index=False)
     st.download_button(
-        "Download CSV", 
-        csv, 
-        file_name="diversity_rankings.csv", 
-        mime="text/csv"
+        "💾 Download Results as CSV",
+        data=csv,
+        file_name="diversity_rankings.csv",
+        mime="text/csv",
+        use_container_width=True
     )
 
 if __name__ == "__main__":
